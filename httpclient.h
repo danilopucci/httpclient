@@ -160,6 +160,7 @@ namespace HttpClient {
     class HttpResponse {
 
     public:
+        uint32_t requestId;
         int version;
         int statusCode;
         std::string location;
@@ -203,6 +204,11 @@ namespace HttpClient {
             responseTimeMs = responseTime;
         }
 
+        void setRequestId(uint32_t requestId_)
+        {
+            requestId = requestId_;
+        }
+
         friend class HttpConnectionBase;
         friend class HttpConnection;
         friend class HttpsConnection;
@@ -212,8 +218,9 @@ namespace HttpClient {
     {
     public:
 
-        HttpConnectionBase(boost::asio::io_context& ioContext, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
+        HttpConnectionBase(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
           : resolver(boost::asio::make_strand(ioContext)),
+            id(id),
             responseData(std::make_shared<HttpResponse>()), 
             responseCallback(responseCallback),
             failureCallback(failureCallback)
@@ -240,7 +247,7 @@ namespace HttpClient {
 
     protected:
         int timeout;
-
+        uint32_t id;
         boost::asio::ip::tcp::resolver resolver;
 
         boost::beast::flat_buffer buffer;
@@ -282,8 +289,8 @@ namespace HttpClient {
     {
     public:
 
-        HttpConnection(boost::asio::io_context& ioContext, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : HttpConnectionBase(ioContext, responseCallback, failureCallback),
+        HttpConnection(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
+            : HttpConnectionBase(ioContext, id, responseCallback, failureCallback),
             stream(boost::asio::make_strand(ioContext))
         {
 
@@ -355,6 +362,7 @@ namespace HttpClient {
         void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
         {
             if(!readHeaderError || response.is_header_done()) {
+                responseData->setRequestId(id);
                 responseData->buildHeaderData(response);
 
                 if(response.skip()) {
@@ -403,8 +411,8 @@ namespace HttpClient {
     class HttpsConnection : public HttpConnectionBase
     {
     public:
-        HttpsConnection(boost::asio::io_context& ioContext, boost::asio::ssl::context& sslContext, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : HttpConnectionBase(ioContext, responseCallback, failureCallback),
+        HttpsConnection(boost::asio::io_context& ioContext, uint32_t id, boost::asio::ssl::context& sslContext, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
+            : HttpConnectionBase(ioContext, id, responseCallback, failureCallback),
             stream(boost::asio::make_strand(ioContext), sslContext)
         {
 
@@ -506,6 +514,7 @@ namespace HttpClient {
         void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
         {
             if(!readHeaderError || response.is_header_done()) {
+                responseData->setRequestId(id);
                 responseData->buildHeaderData(response);
                 readBody();
             }
@@ -542,7 +551,7 @@ namespace HttpClient {
     {
     public:
         Request()
-            : context(), guard(boost::asio::make_work_guard(context))
+            : context(), guard(boost::asio::make_work_guard(context)), requestId(1)
         {
             thread = std::thread([this]() {
                 context.run();
@@ -550,7 +559,7 @@ namespace HttpClient {
         }
 
         Request(const HttpResponse_cb& responseCallback)
-            : context(), guard(boost::asio::make_work_guard(context)), responseCallback(responseCallback)
+            : context(), guard(boost::asio::make_work_guard(context)), requestId(1), responseCallback(responseCallback)
         {
             thread = std::thread([this]() {
                 context.run();
@@ -558,7 +567,7 @@ namespace HttpClient {
         }
 
         Request(const HttpResponse_cb& responseCallback, HttpFailure_cb failureCallback)
-            : context(), guard(boost::asio::make_work_guard(context)), responseCallback(responseCallback), failureCallback(failureCallback)
+            : context(), guard(boost::asio::make_work_guard(context)), requestId(1), responseCallback(responseCallback), failureCallback(failureCallback)
         {
             thread = std::thread([this]() {
                 context.run();
@@ -573,6 +582,11 @@ namespace HttpClient {
             if(thread.joinable()) {
                 thread.join();
             }
+        }
+
+        inline uint32_t getRequestId()
+        {
+            return requestId;
         }
 
         void connect(const std::string& url)
@@ -591,6 +605,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::connect);
 
                 doRequest(httpUrl, request);
@@ -616,6 +631,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::trace);
 
                 doRequest(httpUrl, request);
@@ -641,6 +657,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::options);
             
                 doRequest(httpUrl, request);
@@ -666,6 +683,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::head);
                 const bool skipBody = true;
 
@@ -692,6 +710,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::delete_);
 
                 doRequest(httpUrl, request);
@@ -717,6 +736,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::get);
 
                 doRequest(httpUrl, request);
@@ -742,6 +762,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::post);
                 request.body() = postData;
 
@@ -768,6 +789,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::patch);
                 request.body() = patchData;
 
@@ -794,6 +816,7 @@ namespace HttpClient {
 
             try {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
+                setUniqueRequestId();
                 request.method(boost::beast::http::verb::put);
                 request.body() = putData;
 
@@ -810,6 +833,8 @@ namespace HttpClient {
         boost::asio::executor_work_guard<boost::asio::io_context::executor_type> guard;
 
         std::unordered_map<std::string, std::string> emptyFields;
+
+        uint32_t requestId;
 
         HttpResponse_cb responseCallback;
         HttpFailure_cb failureCallback;
@@ -833,6 +858,11 @@ namespace HttpClient {
             return request;
         }
 
+        void setUniqueRequestId()
+        {
+            requestId++;
+        }
+
         void doRequest(const HttpUrl& httpUrl, boost::beast::http::request<boost::beast::http::string_body>& request, bool skipBody = false)
         {
             std::shared_ptr<HttpConnectionBase> httpConnection;
@@ -841,12 +871,12 @@ namespace HttpClient {
                 boost::asio::ssl::context sslContext{ boost::asio::ssl::context::tlsv12_client };
                 sslContext.set_default_verify_paths();
 
-                httpConnection = std::make_shared<HttpsConnection>(context, sslContext, 
+                httpConnection = std::make_shared<HttpsConnection>(context, requestId, sslContext,
                     std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1), 
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
             }
             else {
-                httpConnection = std::make_shared<HttpConnection>(context, 
+                httpConnection = std::make_shared<HttpConnection>(context, requestId,
                     std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1), 
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
             }

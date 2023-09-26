@@ -48,7 +48,7 @@ int main()
 You can find more examples in examples folder 
 
 ### URLs
-It can handle multiple URL formats, some examples are:
+It can handle multiple URL formats, both on HTTP and HTTPS. Some examples are:
 ```
 Basic HTTP URL:
 http://www.example.com 
