@@ -165,7 +165,7 @@ namespace HttpClient {
         std::string location;
         uint32_t responseTimeMs;
 
-        boost::string_view headerData;
+        std::vector<uint8_t> headerData;
 
         size_t bodySize;
         std::vector<uint8_t> bodyData;
@@ -173,14 +173,18 @@ namespace HttpClient {
     private:
 
         void buildHeaderData(const boost::beast::http::response_parser<boost::beast::http::dynamic_body>& response) {
-            auto responseHeader = response.get();
+            auto& responseHeader = response.get();
             statusCode = responseHeader.result_int();
             version = responseHeader.version();
             location = responseHeader[boost::beast::http::field::location];
 
             auto headers = responseHeader.base();
-            for(const auto& header : headers){
-                std::cout << header.name() << ": " << header.value() << std::endl;
+            for(const auto& header : headers) {
+                boost::beast::string_view headerName = header.name_string();
+                boost::beast::string_view headerValue = header.value();
+
+                std::string headerString = std::string(headerName) + ": " + std::string(headerValue) + "\n";
+                headerData.insert(headerData.end(), headerString.begin(), headerString.end());
             }
 
             bodySize = 0;
