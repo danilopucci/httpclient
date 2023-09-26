@@ -8,7 +8,12 @@ The following HTTP methods are supported: GET, POST, PUT, PATCH, DELETE, TRACE, 
 - also based on [Richard Hodges](https://cppalliance.org/richard/2021/01/01/RichardsNewYearUpdate.html) blog post
 
 ### How to install
-[WIP] - boost-beast should be enough
+
+#### Ubuntu
+```$ sudo apt install libboost-beast-dev```
+
+#### Windows
+```$ vcpkg install boost-beast:x64-windows```
 
 ### Basic code usage
 
@@ -17,7 +22,12 @@ The following HTTP methods are supported: GET, POST, PUT, PATCH, DELETE, TRACE, 
 - create an instance of HttpClient::Request
 - call HTTP request methods
 
-All methods have overloads to handle custom headers 
+All methods have overloads to handle custom headers:
+```cpp
+bool get(const std::string& url);
+bool get(const std::string& url, std::unordered_map<std::string, std::string>& fields);
+```
+
 
 ```cpp
 #include "httpclient.h"
@@ -27,9 +37,9 @@ void requestCallback(const HttpClient::HttpResponse_ptr& response)
     std::cout << "HTTP Response received: " << response->statusCode << " (" << response->responseTimeMs << "ms)" << std::endl;
 }
 
-void failureCallback(const std::string& reason)
+void failureCallback(const HttpClient::HttpResponse_ptr& response)
 {
-    std::cout << "HTTP Response failed (" << reason << ")" << std::endl;
+    std::cout << "HTTP Response failed (" << response.errorMessage << ")" << std::endl;
 }
 
 int main()
