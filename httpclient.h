@@ -886,6 +886,7 @@ namespace HttpClient {
         std::unordered_map<std::string, std::string> emptyFields;
 
         uint32_t requestId;
+        uint32_t requestTimeoutMs = 0;
 
         HttpResponse_cb responseCallback;
         HttpFailure_cb failureCallback;
@@ -930,6 +931,10 @@ namespace HttpClient {
                 httpConnection = std::make_shared<HttpConnection>(context, requestId,
                     std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1),
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
+            }
+
+            if (requestTimeoutMs > 0) {
+                httpConnection->setTimeout(requestTimeoutMs);
             }
 
             httpConnection->create(request, httpUrl.host, httpUrl.port, skipBody);
