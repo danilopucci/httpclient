@@ -100,7 +100,7 @@ namespace HttpClient {
                 setHost(host);
                 setPort(port);
 
-                if(arguments.matched) {
+                if (arguments.matched) {
                     target = arguments.str();
 
                     parsePath(arguments.str());
@@ -118,7 +118,7 @@ namespace HttpClient {
         void parsePath(const std::string& arguments) {
             static const std::regex pathRegex(R"(/([^?#]*))");
             std::smatch match;
-            if(std::regex_search(arguments, match, pathRegex)) {
+            if (std::regex_search(arguments, match, pathRegex)) {
                 setPath(match[1]);
             }
         }
@@ -126,7 +126,7 @@ namespace HttpClient {
         void parseQuery(const std::string& arguments) {
             static const std::regex queryRegex(R"(\?([^#]*))");
             std::smatch match;
-            if(std::regex_search(arguments, match, queryRegex)) {
+            if (std::regex_search(arguments, match, queryRegex)) {
                 setQuery(match[1]);
             }
         }
@@ -134,13 +134,13 @@ namespace HttpClient {
         void parseFragment(const std::string& arguments) {
             static const std::regex fragmentRegex(R"(#(.*))");
             std::smatch match;
-            if(std::regex_search(arguments, match, fragmentRegex)) {
+            if (std::regex_search(arguments, match, fragmentRegex)) {
                 setFragment(match[1]);
             }
         }
 
         void setProtocol(const std::ssub_match& match) {
-            if(match.matched) {
+            if (match.matched) {
                 protocol = match.str();
             }
             else {
@@ -149,39 +149,39 @@ namespace HttpClient {
         }
 
         void setHost(const std::ssub_match& match) {
-            if(match.matched) {
+            if (match.matched) {
                 host = match.str();
             }
         }
 
         void setPort(const std::ssub_match& match) {
-            if(match.matched) {
+            if (match.matched) {
                 port = match.str().empty() ? 0 : std::stoi(match.str().substr(1));
             }
             else {
-                if(protocol.find("https://") != std::string::npos) {
+                if (protocol.find("https://") != std::string::npos) {
                     port = 443;
                 }
-                else if(protocol.find("http://") != std::string::npos) {
+                else if (protocol.find("http://") != std::string::npos) {
                     port = 80;
                 }
             }
         }
 
         void setPath(const std::ssub_match& match) {
-            if(match.matched) {
+            if (match.matched) {
                 path = match.str();
             }
         }
 
         void setQuery(const std::ssub_match& match) {
-            if(match.matched) {
+            if (match.matched) {
                 query = match.str();
             }
         }
 
         void setFragment(const std::ssub_match& match) {
-            if(match.matched) {
+            if (match.matched) {
                 fragment = match.str();
             }
         }
@@ -218,7 +218,7 @@ namespace HttpClient {
             contentType = responseHeader[boost::beast::http::field::content_type];
 
             auto headers = responseHeader.base();
-            for(const auto& header : headers) {
+            for (const auto& header : headers) {
                 boost::beast::string_view headerName = header.name_string();
                 boost::beast::string_view headerValue = header.value();
 
@@ -227,7 +227,7 @@ namespace HttpClient {
             }
 
             bodySize = 0;
-            if(responseHeader.has_content_length()) {
+            if (responseHeader.has_content_length()) {
                 bodySize = std::stoul(responseHeader[boost::beast::http::field::content_length]);
             }
         }
@@ -311,7 +311,7 @@ namespace HttpClient {
 
         void inline onError(const std::string& reason)
         {
-            if(failureCallback) {
+            if (failureCallback) {
                 if(!responseData) {
                     responseData = std::make_shared<HttpResponse>();
                 }
@@ -325,7 +325,7 @@ namespace HttpClient {
 
         void inline onSuccess(const HttpResponse_ptr& responseData)
         {
-            if(responseCallback) {
+            if (responseCallback) {
                 responseCallback(responseData);
             }
         }
@@ -358,7 +358,7 @@ namespace HttpClient {
 
         void onResolve(boost::system::error_code resolveError, boost::asio::ip::tcp::resolver::results_type results)
         {
-            if(!resolveError) {
+            if (!resolveError) {
                 stream.expires_after(std::chrono::milliseconds(timeout));
                 connect(results);
             }
@@ -374,7 +374,7 @@ namespace HttpClient {
 
         void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint)
         {
-            if(!connectError) {
+            if (!connectError) {
                 stream.expires_after(std::chrono::milliseconds(timeout));
                 writeRequest();
             }
@@ -390,7 +390,7 @@ namespace HttpClient {
 
         void onRequestWrite(boost::beast::error_code writeError, std::size_t bytes_transferred)
         {
-            if(!writeError) {
+            if (!writeError) {
                 readHeader();
             }
             else {
@@ -407,11 +407,11 @@ namespace HttpClient {
 
         void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
         {
-            if(!readHeaderError || response.is_header_done()) {
+            if (!readHeaderError || response.is_header_done()) {
                 responseData->setRequestId(id);
                 responseData->buildHeaderData(response);
 
-                if(response.skip()) {
+                if (response.skip()) {
                     responseData->setResponseTime(calculateResponseTime());
                     responseData->success = true;
                     onSuccess(responseData);
@@ -434,13 +434,13 @@ namespace HttpClient {
 
         void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
         {
-            if(readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
+            if (readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
                 stream.socket().close();
                 onError("Failed to read HTTP body: " + readBodyError.message());
                 return;
             }
 
-            if(readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
+            if (readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
                 responseData->setResponseTime(calculateResponseTime());
                 responseData->buildBodyData(response);
                 responseData->success = true;
@@ -471,7 +471,7 @@ namespace HttpClient {
             stream.set_verify_mode(boost::asio::ssl::verify_peer);
             stream.set_verify_callback([](bool, boost::asio::ssl::verify_context&) { return true; });
 
-            if(!SSL_set_tlsext_host_name(stream.native_handle(), url.c_str())){
+            if (!SSL_set_tlsext_host_name(stream.native_handle(), url.c_str())) {
                 boost::beast::error_code ec2(static_cast<int>(::ERR_get_error()), boost::asio::error::get_ssl_category());
                 onError("HTTPS error" + ec2.message());
                 return;
@@ -518,7 +518,7 @@ namespace HttpClient {
 
         void onResolve(boost::system::error_code resolveError, boost::asio::ip::tcp::resolver::results_type results)
         {
-            if(!resolveError) {
+            if (!resolveError) {
                 boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
                 connect(results);
             }
@@ -529,7 +529,7 @@ namespace HttpClient {
 
         void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint)
         {
-            if(!connectError) {
+            if (!connectError) {
                 boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
                 handshake();
             }
@@ -540,7 +540,7 @@ namespace HttpClient {
 
         void onHandshake(boost::system::error_code handshakeError) override
         {
-            if(!handshakeError) {
+            if (!handshakeError) {
                 writeRequest();
             }
             else {
@@ -550,7 +550,7 @@ namespace HttpClient {
 
         void onRequestWrite(boost::beast::error_code writeError, std::size_t bytes_transferred)
         {
-            if(!writeError) {
+            if (!writeError) {
                 readHeader();
             }
             else {
@@ -561,7 +561,7 @@ namespace HttpClient {
 
         void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
         {
-            if(!readHeaderError || response.is_header_done()) {
+            if (!readHeaderError || response.is_header_done()) {
                 responseData->setRequestId(id);
                 responseData->buildHeaderData(response);
                 readBody();
@@ -574,13 +574,13 @@ namespace HttpClient {
 
         void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
         {
-            if(readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
+            if (readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
                 boost::beast::get_lowest_layer(stream).close();
                 onError("Failed to read HTTP body: " + readBodyError.message());
                 return;
             }
 
-            if(readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
+            if (readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
                 responseData->setResponseTime(calculateResponseTime());
                 responseData->buildBodyData(response);
                 responseData->success = true;
@@ -628,7 +628,7 @@ namespace HttpClient {
             context.stop();
 
             guard.reset();
-            if(thread.joinable()) {
+            if (thread.joinable()) {
                 thread.join();
             }
         }
@@ -647,7 +647,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request CONNECT: invalid URL: " + url);
                 return;
             }
@@ -659,7 +659,7 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request CONNECT (" + url + "): " + e.what());
             }
         }
@@ -673,7 +673,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request TRACE: invalid URL: " + url);
                 return;
             }
@@ -685,7 +685,7 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request TRACE (" + url + "): " + e.what());
             }
         }
@@ -699,7 +699,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request OPTIONS: invalid URL: " + url);
                 return;
             }
@@ -711,7 +711,7 @@ namespace HttpClient {
             
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request OPTIONS (" + url + "): " + e.what());
             }
         }
@@ -725,7 +725,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request HEAD: invalid URL: " + url);
                 return;
             }
@@ -738,7 +738,7 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request, skipBody);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request HEAD (" + url + "): " + e.what());
             }
         }
@@ -752,7 +752,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request DELETE: invalid URL: " + url);
                 return;
             }
@@ -764,7 +764,7 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request DELETE (" + url + "): " + e.what());
             }
         }
@@ -778,7 +778,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request GET: invalid URL: " + url);
                 return;
             }
@@ -790,7 +790,7 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request GET (" + url + "): " + e.what());
             }
         }
@@ -804,7 +804,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request POST: invalid URL: " + url);
                 return;
             }
@@ -817,7 +817,7 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request POST (" + url + "): " + e.what());
             }
         }
@@ -831,7 +831,7 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
+            if (!httpUrl.isValid()) {
                 onError("error during HTTP request PATCH: invalid URL: " + url);
                 return;
             }
@@ -844,9 +844,11 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request PATCH (" + url + "): " + e.what());
             }
+
+            return true;
         }
 
         void put(const std::string& url, const std::string& putData)
@@ -858,8 +860,8 @@ namespace HttpClient {
         {
             HttpUrl httpUrl(url);
 
-            if(!httpUrl.isValid()) {
-                onError("error during HTTP request PUT: invalid URL: " + url );
+            if (!httpUrl.isValid()) {
+                onError("error during HTTP request PUT: invalid URL: " + url);
                 return;
             }
 
@@ -871,7 +873,7 @@ namespace HttpClient {
 
                 doRequest(httpUrl, request);
             }
-            catch(std::exception e) {
+            catch (std::exception e) {
                 onError("error during HTTP request PUT (" + url + "): " + e.what());
             }
         }
@@ -898,7 +900,7 @@ namespace HttpClient {
 
             request.set(boost::beast::http::field::host, httpUrl.host);
 
-            for(auto& field : fields) {
+            for (auto& field : fields) {
                 request.insert(field.first, field.second);
             }
 
@@ -916,17 +918,17 @@ namespace HttpClient {
         {
             std::shared_ptr<HttpConnectionBase> httpConnection;
 
-            if(httpUrl.isProtocolSecure()) {
-                boost::asio::ssl::context sslContext{ boost::asio::ssl::context::tlsv12_client };
+            if (httpUrl.isProtocolSecure()) {
+                boost::asio::ssl::context sslContext { boost::asio::ssl::context::tlsv12_client };
                 sslContext.set_default_verify_paths();
 
                 httpConnection = std::make_shared<HttpsConnection>(context, requestId, sslContext,
-                    std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1), 
+                    std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1),
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
             }
             else {
                 httpConnection = std::make_shared<HttpConnection>(context, requestId,
-                    std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1), 
+                    std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1),
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
             }
 
@@ -935,7 +937,7 @@ namespace HttpClient {
 
         void requestSuccessCallback(HttpResponse_ptr response)
         {
-            if(responseCallback) {
+            if (responseCallback) {
                 responseCallback(response);
             }
             else {
@@ -945,7 +947,7 @@ namespace HttpClient {
 
         void requestFailureCallback(HttpResponse_ptr response)
         {
-            if(failureCallback) {
+            if (failureCallback) {
                 failureCallback(response);
             }
             else {
