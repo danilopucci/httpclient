@@ -643,13 +643,18 @@ namespace HttpClient {
             requestTimeoutMs = timeout;
         }
 
-        void connect(const std::string& url, std::unordered_map<std::string, std::string>& fields)
+        bool connect(const std::string& url)
+        {
+            return connect(url, emptyFields);
+        }
+
+        bool connect(const std::string& url, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request CONNECT: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -661,21 +666,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request CONNECT (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
-        void trace(const std::string& url)
+        bool trace(const std::string& url)
         {
-            trace(url, emptyFields);
+            return trace(url, emptyFields);
         }
 
-        void trace(const std::string& url, std::unordered_map<std::string, std::string>& fields)
+        bool trace(const std::string& url, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request TRACE: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -687,21 +695,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request TRACE (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
-        void options(const std::string& url)
+        bool options(const std::string& url)
         {
-            options(url, emptyFields);
+            return options(url, emptyFields);
         }
 
-        void options(const std::string& url, std::unordered_map<std::string, std::string>& fields)
+        bool options(const std::string& url, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request OPTIONS: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -713,21 +724,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request OPTIONS (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
-        void head(const std::string& url)
+        bool head(const std::string& url)
         {
-            head(url, emptyFields);
+            return head(url, emptyFields);
         }
 
-        void head(const std::string& url, std::unordered_map<std::string, std::string>& fields)
+        bool head(const std::string& url, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request HEAD: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -740,21 +754,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request HEAD (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
-        void delete_(const std::string& url)
+        bool delete_(const std::string& url)
         {
-            delete_(url, emptyFields);
+            return delete_(url, emptyFields);
         }
 
-        void delete_(const std::string& url, std::unordered_map<std::string, std::string>& fields)
+        bool delete_(const std::string& url, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request DELETE: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -766,21 +783,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request DELETE (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
-        void get(const std::string& url)
+        bool get(const std::string& url)
         {
-            get(url, emptyFields);
+            return get(url, emptyFields);
         }
 
-        void get(const std::string& url, std::unordered_map<std::string, std::string>& fields)
+        bool get(const std::string& url, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request GET: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -792,21 +812,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request GET (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
-        void post(const std::string& url, const std::string& postData)
+        bool post(const std::string& url, const std::string& postData)
         {
-            post(url, postData, emptyFields);
+            return post(url, postData, emptyFields);
         }
 
-        void post(const std::string& url, const std::string& postData, std::unordered_map<std::string, std::string>& fields)
+        bool post(const std::string& url, const std::string& postData, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request POST: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -819,21 +842,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request POST (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
-        void patch(const std::string& url, const std::string& patchData)
+        bool patch(const std::string& url, const std::string& patchData)
         {
-            patch(url, patchData, emptyFields);
+            return patch(url, patchData, emptyFields);
         }
 
-        void patch(const std::string& url, const std::string& patchData, std::unordered_map<std::string, std::string>& fields)
+        bool patch(const std::string& url, const std::string& patchData, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request PATCH: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -846,23 +872,24 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request PATCH (" + url + "): " + e.what());
+                return false;
             }
 
             return true;
         }
 
-        void put(const std::string& url, const std::string& putData)
+        bool put(const std::string& url, const std::string& putData)
         {
-            put(url, putData, emptyFields);
+            return put(url, putData, emptyFields);
         }
 
-        void put(const std::string& url, const std::string& putData, std::unordered_map<std::string, std::string>& fields)
+        bool put(const std::string& url, const std::string& putData, std::unordered_map<std::string, std::string>& fields)
         {
             HttpUrl httpUrl(url);
 
             if (!httpUrl.isValid()) {
                 onError("error during HTTP request PUT: invalid URL: " + url);
-                return;
+                return false;
             }
 
             try {
@@ -875,7 +902,10 @@ namespace HttpClient {
             }
             catch (std::exception e) {
                 onError("error during HTTP request PUT (" + url + "): " + e.what());
+                return false;
             }
+
+            return true;
         }
 
     private:
