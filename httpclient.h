@@ -54,7 +54,7 @@ namespace HttpClient {
 
     using HttpResponse_ptr = std::shared_ptr<HttpResponse>;
     using HttpResponse_cb = std::function<void(const HttpResponse_ptr&)>;
-    using HttpFailure_cb = std::function<void(const std::string&)>;
+    using HttpFailure_cb = std::function<void(const HttpResponse_ptr&)>;
 
     class HttpUrl {
     public:
@@ -204,6 +204,9 @@ namespace HttpClient {
         size_t bodySize;
         std::vector<uint8_t> bodyData;
 
+        bool success;
+        std::string errorMessage;
+
     private:
 
         void buildHeaderData(const boost::beast::http::response_parser<boost::beast::http::dynamic_body>& response) {
@@ -300,13 +303,20 @@ namespace HttpClient {
         {
             std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
             std::chrono::duration<double, std::milli> duration = end - connectionStart;
-            return duration.count();
+            return static_cast<uint32_t>(duration.count());
         }
 
         void inline onError(const std::string& reason)
         {
             if(failureCallback) {
-                failureCallback(reason);
+                if(!responseData) {
+                    responseData = std::make_shared<HttpResponse>();
+                }
+
+                responseData->success = false;
+                responseData->errorMessage = reason;
+
+                failureCallback(responseData);
             }
         }
 
@@ -400,6 +410,7 @@ namespace HttpClient {
 
                 if(response.skip()) {
                     responseData->setResponseTime(calculateResponseTime());
+                    responseData->success = true;
                     onSuccess(responseData);
                 }
                 else {
@@ -429,6 +440,7 @@ namespace HttpClient {
             if(readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
                 responseData->setResponseTime(calculateResponseTime());
                 responseData->buildBodyData(response);
+                responseData->success = true;
                 onSuccess(responseData);
 
                 stream.socket().close();
@@ -568,6 +580,7 @@ namespace HttpClient {
             if(readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
                 responseData->setResponseTime(calculateResponseTime());
                 responseData->buildBodyData(response);
+                responseData->success = true;
                 onSuccess(responseData);
 
                 boost::beast::get_lowest_layer(stream).close();
@@ -599,7 +612,7 @@ namespace HttpClient {
                 });
         }
 
-        Request(const HttpResponse_cb& responseCallback, HttpFailure_cb failureCallback)
+        Request(const HttpResponse_cb& responseCallback, const HttpFailure_cb& failureCallback)
             : context(), guard(boost::asio::make_work_guard(context)), requestId(1), responseCallback(responseCallback), failureCallback(failureCallback)
         {
             thread = std::thread([this]() {
@@ -632,7 +645,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request CONNECT: invalid URL: " + url);
+                onError("error during HTTP request CONNECT: invalid URL: " + url);
                 return;
             }
 
@@ -644,7 +657,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request CONNECT (" + url + "): " + e.what());
+                onError("error during HTTP request CONNECT (" + url + "): " + e.what());
             }
         }
 
@@ -658,7 +671,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request TRACE: invalid URL: " + url);
+                onError("error during HTTP request TRACE: invalid URL: " + url);
                 return;
             }
 
@@ -670,7 +683,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request TRACE (" + url + "): " + e.what());
+                onError("error during HTTP request TRACE (" + url + "): " + e.what());
             }
         }
 
@@ -684,7 +697,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request OPTIONS: invalid URL: " + url);
+                onError("error during HTTP request OPTIONS: invalid URL: " + url);
                 return;
             }
 
@@ -696,7 +709,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request OPTIONS (" + url + "): " + e.what());
+                onError("error during HTTP request OPTIONS (" + url + "): " + e.what());
             }
         }
 
@@ -710,7 +723,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request HEAD: invalid URL: " + url);
+                onError("error during HTTP request HEAD: invalid URL: " + url);
                 return;
             }
 
@@ -723,7 +736,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request, skipBody);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request HEAD (" + url + "): " + e.what());
+                onError("error during HTTP request HEAD (" + url + "): " + e.what());
             }
         }
 
@@ -737,7 +750,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request DELETE: invalid URL: " + url);
+                onError("error during HTTP request DELETE: invalid URL: " + url);
                 return;
             }
 
@@ -749,7 +762,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request DELETE (" + url + "): " + e.what());
+                onError("error during HTTP request DELETE (" + url + "): " + e.what());
             }
         }
 
@@ -763,7 +776,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request GET: invalid URL: " + url);
+                onError("error during HTTP request GET: invalid URL: " + url);
                 return;
             }
 
@@ -775,7 +788,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request GET (" + url + "): " + e.what());
+                onError("error during HTTP request GET (" + url + "): " + e.what());
             }
         }
 
@@ -789,7 +802,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request POST: invalid URL: " + url);
+                onError("error during HTTP request POST: invalid URL: " + url);
                 return;
             }
 
@@ -802,7 +815,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request POST (" + url + "): " + e.what());
+                onError("error during HTTP request POST (" + url + "): " + e.what());
             }
         }
 
@@ -816,7 +829,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request PATCH: invalid URL: " + url);
+                onError("error during HTTP request PATCH: invalid URL: " + url);
                 return;
             }
 
@@ -829,7 +842,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request PATCH (" + url + "): " + e.what());
+                onError("error during HTTP request PATCH (" + url + "): " + e.what());
             }
         }
 
@@ -843,7 +856,7 @@ namespace HttpClient {
             HttpUrl httpUrl(url);
 
             if(!httpUrl.isValid()) {
-                requestFailureCallback("error during HTTP request PUT: invalid URL: " + url );
+                onError("error during HTTP request PUT: invalid URL: " + url );
                 return;
             }
 
@@ -856,7 +869,7 @@ namespace HttpClient {
                 doRequest(httpUrl, request);
             }
             catch(std::exception e) {
-                requestFailureCallback("error during HTTP request PUT (" + url + "): " + e.what());
+                onError("error during HTTP request PUT (" + url + "): " + e.what());
             }
         }
 
@@ -927,10 +940,25 @@ namespace HttpClient {
             }
         }
 
-        void requestFailureCallback(const std::string& reason)
+        void requestFailureCallback(HttpResponse_ptr response)
         {
             if(failureCallback) {
-                failureCallback(reason);
+                failureCallback(response);
+            }
+            else {
+                std::cout << "HTTP failure but Request has no failureCallback. Failure reason: " << response->errorMessage << std::endl;
+            }
+        }
+
+        void onError(const std::string& reason)
+        {
+            if(failureCallback) {
+                HttpResponse_ptr responseData = std::make_shared<HttpResponse>();
+
+                responseData->success = false;
+                responseData->errorMessage = reason;
+
+                failureCallback(responseData);
             }
             else {
                 std::cout << "HTTP failure but Request has no failureCallback. Failure reason: " << reason << std::endl;
