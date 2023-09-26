@@ -197,7 +197,7 @@ namespace HttpClient {
         int version;
         int statusCode;
         std::string location;
-		std::string contentType;
+        std::string contentType;
         uint32_t responseTimeMs;
 
         std::string headerData;
@@ -215,7 +215,7 @@ namespace HttpClient {
             statusCode = responseHeader.result_int();
             version = responseHeader.version();
             location = responseHeader[boost::beast::http::field::location];
-			contentType = responseHeader[boost::beast::http::field::content_type];
+            contentType = responseHeader[boost::beast::http::field::content_type];
 
             auto headers = responseHeader.base();
             for(const auto& header : headers) {
@@ -257,13 +257,14 @@ namespace HttpClient {
     public:
 
         HttpConnectionBase(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-          : resolver(boost::asio::make_strand(ioContext)),
+            : resolver(boost::asio::make_strand(ioContext)),
             id(id),
-            responseData(std::make_shared<HttpResponse>()), 
+            responseData(std::make_shared<HttpResponse>()),
             responseCallback(responseCallback),
             failureCallback(failureCallback)
         {
             setTimeout(30000);
+            responseData->setRequestId(id);
         }
 
         virtual ~HttpConnectionBase() {
@@ -637,9 +638,9 @@ namespace HttpClient {
             return requestId;
         }
 
-        void connect(const std::string& url)
+        inline void setTimeout(uint32_t timeout)
         {
-            connect(url, emptyFields);
+            requestTimeoutMs = timeout;
         }
 
         void connect(const std::string& url, std::unordered_map<std::string, std::string>& fields)
@@ -954,17 +955,7 @@ namespace HttpClient {
 
         void onError(const std::string& reason)
         {
-            if(failureCallback) {
-                HttpResponse_ptr responseData = std::make_shared<HttpResponse>();
-
-                responseData->success = false;
-                responseData->errorMessage = reason;
-
-                failureCallback(responseData);
-            }
-            else {
-                std::cout << "HTTP failure but Request has no failureCallback. Failure reason: " << reason << std::endl;
-            }
+            std::cout << "Could not complete HTTP request: " << reason << std::endl;
         }
 
     };
