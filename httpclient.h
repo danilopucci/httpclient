@@ -197,12 +197,13 @@ namespace HttpClient {
         int version;
         int statusCode;
         std::string location;
+		std::string contentType;
         uint32_t responseTimeMs;
 
-        std::vector<uint8_t> headerData;
+        std::string headerData;
 
         size_t bodySize;
-        std::vector<uint8_t> bodyData;
+        std::string bodyData;
 
         bool success;
         std::string errorMessage;
@@ -214,6 +215,7 @@ namespace HttpClient {
             statusCode = responseHeader.result_int();
             version = responseHeader.version();
             location = responseHeader[boost::beast::http::field::location];
+			contentType = responseHeader[boost::beast::http::field::content_type];
 
             auto headers = responseHeader.base();
             for(const auto& header : headers) {
@@ -232,7 +234,7 @@ namespace HttpClient {
 
         void buildBodyData(const boost::beast::http::response_parser<boost::beast::http::dynamic_body>& response) {
             auto responseBody = response.get().body().data();
-            bodyData = std::vector<uint8_t>(boost::asio::buffers_begin(responseBody), boost::asio::buffers_end(responseBody));
+            bodyData = std::string(boost::asio::buffers_begin(responseBody), boost::asio::buffers_end(responseBody));
         }
 
         void setResponseTime(uint32_t responseTime)
