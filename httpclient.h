@@ -874,18 +874,4 @@ namespace HttpClient {
 
 }
 
-//temporary
-inline std::ostream& operator<<(std::ostream& out, const HttpClient::HttpUrl& url)
-{
-    out << "url: " << url.url
-        << "\n\t protocol: " << url.protocol
-        << "\n\t host: " << url.host
-        << "\n\t port: " << url.port
-        << "\n\t path: " << url.path
-        << "\n\t query: " << url.query
-        << "\n\t fragment: " << url.fragment;
-    return out;
-}
-
-
-#endif HTTP_H
+#endif HTTPCLIENT_H
