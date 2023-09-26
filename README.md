@@ -7,6 +7,9 @@ The following HTTP methods are supported: GET, POST, PUT, PATCH, DELETE, TRACE, 
 - was developed based on Boost.Beast [http_client_async](https://www.boost.org/doc/libs/1_82_0/libs/beast/example/http/client/async/http_client_async.cpp)
 - also based on [Richard Hodges](https://cppalliance.org/richard/2021/01/01/RichardsNewYearUpdate.html) blog post
 
+### How to install
+[WIP] - boost-beast should be enough
+
 ### Basic code usage
 
 - include the library header
