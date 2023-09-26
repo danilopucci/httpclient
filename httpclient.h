@@ -90,7 +90,7 @@ namespace HttpClient {
             valid = false;
 
             std::smatch matches;
-            if(std::regex_match(url, matches, urlRegex)) {
+            if (std::regex_match(url, matches, urlRegex)) {
                 auto& scheme = matches[1];
                 auto& host = matches[2];
                 auto& port = matches[3];
@@ -719,7 +719,7 @@ namespace HttpClient {
                 boost::beast::http::request<boost::beast::http::string_body> request = buildBasicRequest(httpUrl, fields);
                 setUniqueRequestId();
                 request.method(boost::beast::http::verb::options);
-            
+
                 doRequest(httpUrl, request);
             }
             catch (std::exception e) {
