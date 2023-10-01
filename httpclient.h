@@ -44,7 +44,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/beast/ssl.hpp>
-#include <boost/beast.hpp>
+#include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/algorithm/string.hpp>
 
@@ -235,14 +235,13 @@ namespace HttpClient {
             }
         }
 
-        void buildBodyData(const boost::beast::http::response_parser<boost::beast::http::dynamic_body>& response) {
-            auto responseBody = response.get().body().data();
-            bodyData = std::string(boost::asio::buffers_begin(responseBody), boost::asio::buffers_end(responseBody));
+        inline void buildBodyData(const boost::beast::http::response_parser<boost::beast::http::dynamic_body>& response) {
+            bodyData = boost::beast::buffers_to_string(response.get().body().data());
         }
 
-        void setResponseTime(uint32_t responseTime)
+        void setResponseTime(uint32_t responseTimeMs_)
         {
-            responseTimeMs = responseTime;
+            responseTimeMs = responseTimeMs_;
         }
 
         void setRequestId(uint32_t requestId_)
