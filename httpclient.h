@@ -42,10 +42,17 @@
 #include <unordered_map>
 #include <regex>
 
-#include <boost/asio.hpp>
+#include <boost/asio/strand.hpp>
+
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
+
+#include <boost/beast/http/write.hpp>
+#include <boost/beast/http/read.hpp>
+#include <boost/beast/http/parser.hpp>
+#include <boost/beast/http/dynamic_body.hpp>
+#include <boost/beast/http/string_body.hpp>
+
 #include <boost/algorithm/string.hpp>
 
 namespace HttpClient {
