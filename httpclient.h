@@ -256,17 +256,20 @@ namespace HttpClient {
             requestId = requestId_;
         }
 
+        template <typename StreamType>
         friend class HttpConnectionBase;
         friend class HttpConnection;
         friend class HttpsConnection;
     };
 
-    class HttpConnectionBase : public std::enable_shared_from_this<HttpConnectionBase>
+    template <typename StreamType>
+    class HttpConnectionBase : public std::enable_shared_from_this<HttpConnectionBase<StreamType>>
     {
     public:
 
-        HttpConnectionBase(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : resolver(boost::asio::make_strand(ioContext)),
+        HttpConnectionBase(StreamType& stream, boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
+            : stream(stream),
+            resolver(boost::asio::make_strand(ioContext)),
             id(id),
             responseData(std::make_shared<HttpResponse>()),
             responseCallback(responseCallback),
@@ -297,6 +300,8 @@ namespace HttpClient {
         int timeout;
         uint32_t id;
         boost::asio::ip::tcp::resolver resolver;
+
+        StreamType& stream;
 
         boost::beast::flat_buffer buffer;
         boost::beast::http::request<boost::beast::http::string_body> request;
@@ -340,13 +345,13 @@ namespace HttpClient {
         }
     };
 
-    class HttpConnection : public HttpConnectionBase
+    class HttpConnection : public HttpConnectionBase<boost::beast::tcp_stream>
     {
     public:
 
         HttpConnection(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : HttpConnectionBase(ioContext, id, responseCallback, failureCallback),
-            stream(boost::asio::make_strand(ioContext))
+            : HttpConnectionBase<boost::beast::tcp_stream>(stream_, ioContext, id, responseCallback, failureCallback),
+            stream_(boost::asio::make_strand(ioContext))
         {
 
         }
@@ -462,15 +467,15 @@ namespace HttpClient {
             readBody();
         }
 
-        boost::beast::tcp_stream stream;
+        boost::beast::tcp_stream stream_;
     };
 
-    class HttpsConnection : public HttpConnectionBase
+    class HttpsConnection : public HttpConnectionBase<boost::beast::ssl_stream<boost::beast::tcp_stream>>
     {
     public:
         HttpsConnection(boost::asio::io_context& ioContext, uint32_t id, boost::asio::ssl::context& sslContext, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : HttpConnectionBase(ioContext, id, responseCallback, failureCallback),
-            stream(boost::asio::make_strand(ioContext), sslContext)
+            : HttpConnectionBase<boost::beast::ssl_stream<boost::beast::tcp_stream>>(stream_, ioContext, id, responseCallback, failureCallback),
+            stream_(boost::asio::make_strand(ioContext), sslContext)
         {
 
         }
@@ -602,7 +607,7 @@ namespace HttpClient {
             readBody();
         }
 
-        boost::beast::ssl_stream<boost::beast::tcp_stream> stream;
+        boost::beast::ssl_stream<boost::beast::tcp_stream> stream_;
     };
 
     class Request
@@ -956,27 +961,34 @@ namespace HttpClient {
 
         void doRequest(const HttpUrl& httpUrl, boost::beast::http::request<boost::beast::http::string_body>& request, bool skipBody = false)
         {
-            std::shared_ptr<HttpConnectionBase> httpConnection;
-
-            if (httpUrl.isProtocolSecure()) {
-                boost::asio::ssl::context sslContext { boost::asio::ssl::context::tlsv12_client };
+            if(httpUrl.isProtocolSecure()) {
+                std::shared_ptr<HttpsConnection> httpConnection;
+                boost::asio::ssl::context sslContext{ boost::asio::ssl::context::tlsv12_client };
                 sslContext.set_default_verify_paths();
 
                 httpConnection = std::make_shared<HttpsConnection>(context, requestId, sslContext,
                     std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1),
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
+
+                if(requestTimeoutMs > 0) {
+                    httpConnection->setTimeout(requestTimeoutMs);
+                }
+
+                httpConnection->create(request, httpUrl.host, httpUrl.port, skipBody);
             }
             else {
+                std::shared_ptr<HttpConnection> httpConnection;
+
                 httpConnection = std::make_shared<HttpConnection>(context, requestId,
                     std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1),
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
-            }
 
-            if (requestTimeoutMs > 0) {
-                httpConnection->setTimeout(requestTimeoutMs);
-            }
+                if(requestTimeoutMs > 0) {
+                    httpConnection->setTimeout(requestTimeoutMs);
+                }
 
-            httpConnection->create(request, httpUrl.host, httpUrl.port, skipBody);
+                httpConnection->create(request, httpUrl.host, httpUrl.port, skipBody);
+            }
         }
 
         void requestSuccessCallback(HttpResponse_ptr response)
