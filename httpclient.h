@@ -285,15 +285,102 @@ namespace HttpClient {
 
         virtual void create(const boost::beast::http::request<boost::beast::http::string_body>& request_, const std::string& url, uint32_t port, bool skipBody = false) = 0;
 
-        virtual void onResolve(boost::system::error_code resolveerror, boost::asio::ip::tcp::resolver::results_type results) = 0;
         virtual void onConnect(boost::system::error_code connecterror, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint) = 0;
         virtual void onHandshake(boost::system::error_code handshakeError) { };
-        virtual void onRequestWrite(boost::beast::error_code writeerror, std::size_t bytes_transferred) = 0;
-        virtual void onReadHeader(boost::beast::error_code readheadererror, std::size_t bytes_transferred) = 0;
-        virtual void onReadBody(boost::beast::error_code readbodyerror, std::size_t bytes_transferred) = 0;
 
         inline void setTimeout(int timeout_) {
             timeout = timeout_;
+        }
+
+        inline void resolve(const std::string& url, uint32_t port)
+        {
+            resolver.async_resolve(url, std::to_string(port), boost::beast::bind_front_handler(&HttpConnectionBase::onResolve, this->shared_from_this()));
+        }
+
+        void onResolve(boost::system::error_code resolveError, boost::asio::ip::tcp::resolver::results_type results)
+        {
+            if(!resolveError) {
+                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
+                connect(results);
+            }
+            else {
+                onError("Failed to resolve to HTTP address: " + resolveError.message());
+            }
+        }
+
+        inline void connect(const boost::asio::ip::tcp::resolver::results_type& results)
+        {
+            boost::beast::get_lowest_layer(stream).async_connect(results, boost::beast::bind_front_handler(&HttpConnectionBase::onConnect, this->shared_from_this()));
+        }
+
+        inline void writeRequest()
+        {
+            boost::beast::http::async_write(stream, request, boost::beast::bind_front_handler(&HttpConnectionBase::onRequestWrite, this->shared_from_this()));
+        }
+
+        void onRequestWrite(boost::beast::error_code writeError, std::size_t bytes_transferred)
+        {
+            if(!writeError) {
+                readHeader();
+            }
+            else {
+                boost::beast::get_lowest_layer(stream).close();
+                onError("Failed to write HTTP request: " + writeError.message());
+            }
+        }
+
+        inline void readHeader()
+        {
+            buffer.max_size(MAX_HEADER_CHUNCK_SIZE);
+            boost::beast::http::async_read_header(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadHeader, this->shared_from_this()));
+        }
+
+        void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
+        {
+            if(!readHeaderError || response.is_header_done()) {
+                responseData->setRequestId(id);
+                responseData->buildHeaderData(response);
+
+                if(response.skip()) {
+                    responseData->setResponseTime(calculateResponseTime());
+                    responseData->success = true;
+                    onSuccess(responseData);
+                }
+                else {
+                    readBody();
+                }
+            }
+            else {
+                boost::beast::get_lowest_layer(stream).close();
+                onError("Failed to read HTTP header: " + readHeaderError.message());
+            }
+        }
+
+        inline void readBody()
+        {
+            buffer.max_size(MAX_BODY_CHUNCK_SIZE);
+            boost::beast::http::async_read_some(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadBody, this->shared_from_this()));
+        }
+
+        void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
+        {
+            if(readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
+                boost::beast::get_lowest_layer(stream).close();
+                onError("Failed to read HTTP body: " + readBodyError.message());
+                return;
+            }
+
+            if(readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
+                responseData->setResponseTime(calculateResponseTime());
+                responseData->buildBodyData(response);
+                responseData->success = true;
+                onSuccess(responseData);
+
+                boost::beast::get_lowest_layer(stream).close();
+                return;
+            }
+
+            readBody();
         }
 
     protected:
@@ -365,27 +452,6 @@ namespace HttpClient {
         }
 
     private:
-        inline void resolve(const std::string& url, uint32_t port)
-        {
-            resolver.async_resolve(url, std::to_string(port), boost::beast::bind_front_handler(&HttpConnectionBase::onResolve, shared_from_this()));
-        }
-
-        void onResolve(boost::system::error_code resolveError, boost::asio::ip::tcp::resolver::results_type results)
-        {
-            if (!resolveError) {
-                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
-                connect(results);
-            }
-            else {
-                onError("Failed to resolve to HTTP address: " + resolveError.message());
-            }
-        }
-
-        inline void connect(const boost::asio::ip::tcp::resolver::results_type& results)
-        {
-            stream.async_connect(results, boost::beast::bind_front_handler(&HttpConnectionBase::onConnect, shared_from_this()));
-        }
-
         void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint)
         {
             if (!connectError) {
@@ -395,76 +461,6 @@ namespace HttpClient {
             else {
                 onError("Failed to connect to HTTP socket: " + connectError.message());
             }
-        }
-
-        inline void writeRequest()
-        {
-            boost::beast::http::async_write(stream, request, boost::beast::bind_front_handler(&HttpConnectionBase::onRequestWrite, shared_from_this()));
-        }
-
-        void onRequestWrite(boost::beast::error_code writeError, std::size_t bytes_transferred)
-        {
-            if (!writeError) {
-                readHeader();
-            }
-            else {
-                boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to write HTTP request: " + writeError.message());
-            }
-        }
-
-        inline void readHeader()
-        {
-            buffer.max_size(MAX_HEADER_CHUNCK_SIZE);
-            boost::beast::http::async_read_header(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadHeader, shared_from_this()));
-        }
-
-        void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
-        {
-            if (!readHeaderError || response.is_header_done()) {
-                responseData->setRequestId(id);
-                responseData->buildHeaderData(response);
-
-                if (response.skip()) {
-                    responseData->setResponseTime(calculateResponseTime());
-                    responseData->success = true;
-                    onSuccess(responseData);
-                }
-                else {
-                    readBody();
-                }
-            }
-            else {
-                boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to read HTTP header: " + readHeaderError.message());
-            }
-        }
-
-        inline void readBody()
-        {
-            buffer.max_size(MAX_BODY_CHUNCK_SIZE);
-            boost::beast::http::async_read_some(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadBody, shared_from_this()));
-        }
-
-        void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
-        {
-            if (readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
-                boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to read HTTP body: " + readBodyError.message());
-                return;
-            }
-
-            if (readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
-                responseData->setResponseTime(calculateResponseTime());
-                responseData->buildBodyData(response);
-                responseData->success = true;
-                onSuccess(responseData);
-
-                boost::beast::get_lowest_layer(stream).close();
-                return;
-            }
-
-            readBody();
         }
 
         boost::beast::tcp_stream stream_;
@@ -498,47 +494,10 @@ namespace HttpClient {
         }
 
     private:
-        inline void resolve(const std::string& url, uint32_t port)
-        {
-            resolver.async_resolve(url, std::to_string(port), boost::beast::bind_front_handler(&HttpConnectionBase::onResolve, shared_from_this()));
-        }
-
-        inline void connect(const boost::asio::ip::tcp::resolver::results_type& results)
-        {
-            boost::beast::get_lowest_layer(stream).async_connect(results, boost::beast::bind_front_handler(&HttpConnectionBase::onConnect, shared_from_this()));
-        }
 
         inline void handshake()
         {
             stream.async_handshake(boost::asio::ssl::stream_base::client, boost::beast::bind_front_handler(&HttpConnectionBase::onHandshake, shared_from_this()));
-        }
-
-        inline void writeRequest()
-        {
-            boost::beast::http::async_write(stream, request, boost::beast::bind_front_handler(&HttpConnectionBase::onRequestWrite, shared_from_this()));
-        }
-
-        inline void readHeader()
-        {
-            buffer.max_size(MAX_HEADER_CHUNCK_SIZE);
-            boost::beast::http::async_read_header(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadHeader, shared_from_this()));
-        }
-
-        inline void readBody()
-        {
-            buffer.max_size(MAX_BODY_CHUNCK_SIZE);
-            boost::beast::http::async_read_some(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadBody, shared_from_this()));
-        }
-
-        void onResolve(boost::system::error_code resolveError, boost::asio::ip::tcp::resolver::results_type results)
-        {
-            if (!resolveError) {
-                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
-                connect(results);
-            }
-            else {
-                onError("Failed to resolve to HTTP address: " + resolveError.message());
-            }
         }
 
         void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint)
@@ -560,51 +519,6 @@ namespace HttpClient {
             else {
                 onError("Failed SSL handshake: " + handshakeError.message());
             }
-        }
-
-        void onRequestWrite(boost::beast::error_code writeError, std::size_t bytes_transferred)
-        {
-            if (!writeError) {
-                readHeader();
-            }
-            else {
-                boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to write HTTP request: " + writeError.message());
-            }
-        }
-
-        void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
-        {
-            if (!readHeaderError || response.is_header_done()) {
-                responseData->setRequestId(id);
-                responseData->buildHeaderData(response);
-                readBody();
-            }
-            else {
-                boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to read HTTP header: " + readHeaderError.message());
-            }
-        }
-
-        void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
-        {
-            if (readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
-                boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to read HTTP body: " + readBodyError.message());
-                return;
-            }
-
-            if (readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
-                responseData->setResponseTime(calculateResponseTime());
-                responseData->buildBodyData(response);
-                responseData->success = true;
-                onSuccess(responseData);
-
-                boost::beast::get_lowest_layer(stream).close();
-                return;
-            }
-
-            readBody();
         }
 
         boost::beast::ssl_stream<boost::beast::tcp_stream> stream_;
