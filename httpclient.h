@@ -70,7 +70,7 @@ namespace HttpClient {
         }
 
         bool isProtocolSecure() const {
-            return protocol == "https://";
+            return secure;
         }
 
         std::string url;
@@ -146,6 +146,8 @@ namespace HttpClient {
             else {
                 protocol = "http://";
             }
+
+            secure = protocol == "https://";
         }
 
         void setHost(const std::ssub_match& match) {
@@ -188,6 +190,7 @@ namespace HttpClient {
 
     private:
         bool valid;
+        bool secure;
     };
 
     class HttpResponse {
