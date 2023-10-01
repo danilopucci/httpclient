@@ -368,7 +368,7 @@ namespace HttpClient {
         void onResolve(boost::system::error_code resolveError, boost::asio::ip::tcp::resolver::results_type results)
         {
             if (!resolveError) {
-                stream.expires_after(std::chrono::milliseconds(timeout));
+                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
                 connect(results);
             }
             else {
@@ -384,7 +384,7 @@ namespace HttpClient {
         void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint)
         {
             if (!connectError) {
-                stream.expires_after(std::chrono::milliseconds(timeout));
+                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
                 writeRequest();
             }
             else {
@@ -403,7 +403,7 @@ namespace HttpClient {
                 readHeader();
             }
             else {
-                stream.socket().close();
+                boost::beast::get_lowest_layer(stream).close();
                 onError("Failed to write HTTP request: " + writeError.message());
             }
         }
@@ -430,7 +430,7 @@ namespace HttpClient {
                 }
             }
             else {
-                stream.socket().close();
+                boost::beast::get_lowest_layer(stream).close();
                 onError("Failed to read HTTP header: " + readHeaderError.message());
             }
         }
@@ -444,7 +444,7 @@ namespace HttpClient {
         void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
         {
             if (readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
-                stream.socket().close();
+                boost::beast::get_lowest_layer(stream).close();
                 onError("Failed to read HTTP body: " + readBodyError.message());
                 return;
             }
@@ -455,7 +455,7 @@ namespace HttpClient {
                 responseData->success = true;
                 onSuccess(responseData);
 
-                stream.socket().close();
+                boost::beast::get_lowest_layer(stream).close();
                 return;
             }
 
