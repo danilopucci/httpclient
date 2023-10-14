@@ -256,20 +256,17 @@ namespace HttpClient {
             requestId = requestId_;
         }
 
-        template <typename StreamType>
         friend class HttpConnectionBase;
         friend class HttpConnection;
         friend class HttpsConnection;
     };
 
-    template <typename StreamType>
-    class HttpConnectionBase : public std::enable_shared_from_this<HttpConnectionBase<StreamType>>
+    class HttpConnectionBase : public std::enable_shared_from_this<HttpConnectionBase>
     {
     public:
 
-        HttpConnectionBase(StreamType& stream, boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : stream(stream),
-            resolver(boost::asio::make_strand(ioContext)),
+        HttpConnectionBase(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
+            : resolver(boost::asio::make_strand(ioContext)),
             id(id),
             responseData(std::make_shared<HttpResponse>()),
             responseCallback(responseCallback),
@@ -292,6 +289,73 @@ namespace HttpClient {
             timeout = timeout_;
         }
 
+    protected:
+        int timeout;
+        uint32_t id;
+        boost::asio::ip::tcp::resolver resolver;
+
+        boost::beast::flat_buffer buffer;
+        boost::beast::http::request<boost::beast::http::string_body> request;
+        boost::beast::http::response_parser<boost::beast::http::dynamic_body> response;
+
+        std::chrono::steady_clock::time_point connectionStart;
+
+        const int MAX_HEADER_CHUNCK_SIZE = 8 * 1024;
+        const int MAX_BODY_CHUNCK_SIZE = 64 * 1024;
+
+        HttpResponse_ptr responseData;
+        HttpResponse_cb responseCallback;
+        HttpFailure_cb failureCallback;
+
+        uint32_t calculateResponseTime()
+        {
+            std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+            std::chrono::duration<double, std::milli> duration = end - connectionStart;
+            return static_cast<uint32_t>(duration.count());
+        }
+
+        void inline onError(const std::string& reason)
+        {
+            if (failureCallback) {
+                if(!responseData) {
+                    responseData = std::make_shared<HttpResponse>();
+                }
+
+                responseData->success = false;
+                responseData->errorMessage = reason;
+
+                failureCallback(responseData);
+            }
+        }
+
+        void inline onSuccess(const HttpResponse_ptr& responseData)
+        {
+            if (responseCallback) {
+                responseCallback(responseData);
+            }
+        }
+    };
+
+    class HttpConnection : public HttpConnectionBase
+    {
+    public:
+
+        HttpConnection(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
+            : HttpConnectionBase(ioContext, id, responseCallback, failureCallback),
+            stream(boost::asio::make_strand(ioContext))
+        {
+
+        }
+
+        void create(const boost::beast::http::request<boost::beast::http::string_body>& request_, const std::string& url, uint32_t port, bool skipBody = false)
+        {
+            request = request_;
+            connectionStart = std::chrono::steady_clock::now();
+            response.skip(skipBody);
+            resolve(url, port);
+        }
+
+    private:
         inline void resolve(const std::string& url, uint32_t port)
         {
             resolver.async_resolve(url, std::to_string(port), boost::beast::bind_front_handler(&HttpConnectionBase::onResolve, this->shared_from_this()));
@@ -383,95 +447,15 @@ namespace HttpClient {
             readBody();
         }
 
-    protected:
-        int timeout;
-        uint32_t id;
-        boost::asio::ip::tcp::resolver resolver;
-
-        StreamType& stream;
-
-        boost::beast::flat_buffer buffer;
-        boost::beast::http::request<boost::beast::http::string_body> request;
-        boost::beast::http::response_parser<boost::beast::http::dynamic_body> response;
-
-        std::chrono::steady_clock::time_point connectionStart;
-
-        const int MAX_HEADER_CHUNCK_SIZE = 8 * 1024;
-        const int MAX_BODY_CHUNCK_SIZE = 64 * 1024;
-
-        HttpResponse_ptr responseData;
-        HttpResponse_cb responseCallback;
-        HttpFailure_cb failureCallback;
-
-        uint32_t calculateResponseTime()
-        {
-            std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-            std::chrono::duration<double, std::milli> duration = end - connectionStart;
-            return static_cast<uint32_t>(duration.count());
-        }
-
-        void inline onError(const std::string& reason)
-        {
-            if (failureCallback) {
-                if(!responseData) {
-                    responseData = std::make_shared<HttpResponse>();
-                }
-
-                responseData->success = false;
-                responseData->errorMessage = reason;
-
-                failureCallback(responseData);
-            }
-        }
-
-        void inline onSuccess(const HttpResponse_ptr& responseData)
-        {
-            if (responseCallback) {
-                responseCallback(responseData);
-            }
-        }
+        boost::beast::tcp_stream stream;
     };
 
-    class HttpConnection : public HttpConnectionBase<boost::beast::tcp_stream>
-    {
-    public:
-
-        HttpConnection(boost::asio::io_context& ioContext, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : HttpConnectionBase<boost::beast::tcp_stream>(stream_, ioContext, id, responseCallback, failureCallback),
-            stream_(boost::asio::make_strand(ioContext))
-        {
-
-        }
-
-        void create(const boost::beast::http::request<boost::beast::http::string_body>& request_, const std::string& url, uint32_t port, bool skipBody = false)
-        {
-            request = request_;
-            connectionStart = std::chrono::steady_clock::now();
-            response.skip(skipBody);
-            resolve(url, port);
-        }
-
-    private:
-        void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint)
-        {
-            if (!connectError) {
-                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
-                writeRequest();
-            }
-            else {
-                onError("Failed to connect to HTTP socket: " + connectError.message());
-            }
-        }
-
-        boost::beast::tcp_stream stream_;
-    };
-
-    class HttpsConnection : public HttpConnectionBase<boost::beast::ssl_stream<boost::beast::tcp_stream>>
+    class HttpsConnection : public HttpConnectionBase
     {
     public:
         HttpsConnection(boost::asio::io_context& ioContext, uint32_t id, boost::asio::ssl::context& sslContext, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
-            : HttpConnectionBase<boost::beast::ssl_stream<boost::beast::tcp_stream>>(stream_, ioContext, id, responseCallback, failureCallback),
-            stream_(boost::asio::make_strand(ioContext), sslContext)
+            : HttpConnectionBase(ioContext, id, responseCallback, failureCallback),
+            stream(boost::asio::make_strand(ioContext), sslContext)
         {
 
         }
@@ -521,7 +505,52 @@ namespace HttpClient {
             }
         }
 
-        boost::beast::ssl_stream<boost::beast::tcp_stream> stream_;
+        void onRequestWrite(boost::beast::error_code writeError, std::size_t bytes_transferred)
+        {
+            if (!writeError) {
+                readHeader();
+            }
+            else {
+                boost::beast::get_lowest_layer(stream).close();
+                onError("Failed to write HTTP request: " + writeError.message());
+            }
+        }
+
+        void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
+        {
+            if (!readHeaderError || response.is_header_done()) {
+                responseData->setRequestId(id);
+                responseData->buildHeaderData(response);
+                readBody();
+            }
+            else {
+                boost::beast::get_lowest_layer(stream).close();
+                onError("Failed to read HTTP header: " + readHeaderError.message());
+            }
+        }
+
+        void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
+        {
+            if (readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
+                boost::beast::get_lowest_layer(stream).close();
+                onError("Failed to read HTTP body: " + readBodyError.message());
+                return;
+            }
+
+            if (readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
+                responseData->setResponseTime(calculateResponseTime());
+                responseData->buildBodyData(response);
+                responseData->success = true;
+                onSuccess(responseData);
+
+                boost::beast::get_lowest_layer(stream).close();
+                return;
+            }
+
+            readBody();
+        }
+
+        boost::beast::ssl_stream<boost::beast::tcp_stream> stream;
     };
 
     class Request
@@ -875,34 +904,27 @@ namespace HttpClient {
 
         void doRequest(const HttpUrl& httpUrl, boost::beast::http::request<boost::beast::http::string_body>& request, bool skipBody = false)
         {
-            if(httpUrl.isProtocolSecure()) {
-                std::shared_ptr<HttpsConnection> httpConnection;
-                boost::asio::ssl::context sslContext{ boost::asio::ssl::context::tlsv12_client };
+            std::shared_ptr<HttpConnectionBase> httpConnection;
+
+            if (httpUrl.isProtocolSecure()) {
+                boost::asio::ssl::context sslContext { boost::asio::ssl::context::tlsv12_client };
                 sslContext.set_default_verify_paths();
 
                 httpConnection = std::make_shared<HttpsConnection>(context, requestId, sslContext,
                     std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1),
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
-
-                if(requestTimeoutMs > 0) {
-                    httpConnection->setTimeout(requestTimeoutMs);
-                }
-
-                httpConnection->create(request, httpUrl.host, httpUrl.port, skipBody);
             }
             else {
-                std::shared_ptr<HttpConnection> httpConnection;
-
                 httpConnection = std::make_shared<HttpConnection>(context, requestId,
                     std::bind(&Request::requestSuccessCallback, this, std::placeholders::_1),
                     std::bind(&Request::requestFailureCallback, this, std::placeholders::_1));
-
-                if(requestTimeoutMs > 0) {
-                    httpConnection->setTimeout(requestTimeoutMs);
-                }
-
-                httpConnection->create(request, httpUrl.host, httpUrl.port, skipBody);
             }
+
+            if (requestTimeoutMs > 0) {
+                httpConnection->setTimeout(requestTimeoutMs);
+            }
+
+            httpConnection->create(request, httpUrl.host, httpUrl.port, skipBody);
         }
 
         void requestSuccessCallback(HttpResponse_ptr response)
