@@ -268,6 +268,7 @@ namespace HttpClient {
         HttpConnectionBase(boost::asio::any_io_executor executor, uint32_t id, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
             : resolver(executor),
             stream(executor),
+            timer(executor),
             id(id),
             responseData(std::make_shared<HttpResponse>()),
             responseCallback(responseCallback),
@@ -295,86 +296,86 @@ namespace HttpClient {
 
         virtual void resolve(const std::string& url, uint32_t port)
         {
-            resolver.async_resolve(url, std::to_string(port), boost::beast::bind_front_handler(&HttpConnectionBase::onResolve, this->shared_from_this()));
+            resolver.async_resolve(url, std::to_string(port), std::bind(&HttpConnectionBase::onResolve, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
-        virtual void onResolve(boost::system::error_code resolveError, boost::asio::ip::tcp::resolver::results_type results)
+        virtual void onResolve(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type results)
         {
-            if(!resolveError) {
-                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
+            if(!error) {
+                timer.expires_after(std::chrono::milliseconds(timeout));
                 connect(results);
             }
             else {
-                onError("Failed to resolve to HTTP address: " + resolveError.message());
+                onError("Failed to resolve to HTTP address: " + error.message());
             }
         }
 
         virtual void connect(const boost::asio::ip::tcp::resolver::results_type& results)
         {
-            boost::beast::get_lowest_layer(stream).async_connect(results, boost::beast::bind_front_handler(&HttpConnectionBase::onConnect, this->shared_from_this()));
+            boost::asio::async_connect(stream, results.begin(), results.end(), std::bind(&HttpConnectionBase::onConnect, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
-        virtual void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint)
+        virtual void onConnect(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type::iterator i)
         {
-            if(!connectError) {
-                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
+            if(!error) {
+                timer.expires_after(std::chrono::milliseconds(timeout));
                 writeRequest();
             }
             else {
-                onError("Failed to connect to HTTP socket: " + connectError.message());
+                onError("Failed to connect to HTTP socket: " + error.message());
             }
         }
 
         virtual void writeRequest()
         {
-            boost::beast::http::async_write(stream, request, boost::beast::bind_front_handler(&HttpConnectionBase::onRequestWrite, this->shared_from_this()));
+            boost::beast::http::async_write(stream, request, std::bind(&HttpConnectionBase::onRequestWrite, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
-        virtual void onRequestWrite(boost::beast::error_code writeError, std::size_t bytes_transferred)
+        virtual void onRequestWrite(const boost::beast::error_code& error, std::size_t bytes_transferred)
         {
-            if(!writeError) {
+            if(!error) {
                 readHeader();
             }
             else {
                 boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to write HTTP request: " + writeError.message());
+                onError("Failed to write HTTP request: " + error.message());
             }
         }
 
         virtual void readHeader()
         {
             buffer.max_size(MAX_HEADER_CHUNCK_SIZE);
-            boost::beast::http::async_read_header(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadHeader, this->shared_from_this()));
+            boost::beast::http::async_read_header(stream, buffer, response, std::bind(&HttpConnectionBase::onReadHeader, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
-        virtual void onReadHeader(boost::beast::error_code readHeaderError, std::size_t bytes_transferred)
+        virtual void onReadHeader(const boost::beast::error_code& error, std::size_t bytes_transferred)
         {
-            if(!readHeaderError || response.is_header_done()) {
+            if(!error || response.is_header_done()) {
                 responseData->setRequestId(id);
                 responseData->buildHeaderData(response);
                 readBody();
             }
             else {
                 boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to read HTTP header: " + readHeaderError.message());
+                onError("Failed to read HTTP header: " + error.message());
             }
         }
 
         virtual void readBody()
         {
             buffer.max_size(MAX_BODY_CHUNCK_SIZE);
-            boost::beast::http::async_read_some(stream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadBody, this->shared_from_this()));
+            boost::beast::http::async_read_some(stream, buffer, response, std::bind(&HttpConnectionBase::onReadBody, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
-        virtual void onReadBody(boost::beast::error_code readBodyError, std::size_t bytes_transferred)
+        virtual void onReadBody(const boost::beast::error_code& error, std::size_t bytes_transferred)
         {
-            if(readBodyError && readBodyError != boost::beast::http::error::end_of_stream) {
+            if(error && error != boost::beast::http::error::end_of_stream) {
                 boost::beast::get_lowest_layer(stream).close();
-                onError("Failed to read HTTP body: " + readBodyError.message());
+                onError("Failed to read HTTP body: " + error.message());
                 return;
             }
 
-            if(readBodyError == boost::beast::http::error::end_of_stream || response.is_done()) {
+            if(error == boost::beast::http::error::end_of_stream || response.is_done()) {
                 responseData->setResponseTime(calculateResponseTime());
                 responseData->buildBodyData(response);
                 responseData->success = true;
@@ -387,11 +388,34 @@ namespace HttpClient {
             readBody();
         }
 
+        void inline onError(const std::string& reason)
+        {
+            if(failureCallback) {
+                if(!responseData) {
+                    responseData = std::make_shared<HttpResponse>();
+                }
+
+                responseData->success = false;
+                responseData->errorMessage = reason;
+
+                failureCallback(responseData);
+            }
+        }
+
+        void inline onSuccess(const HttpResponse_ptr& responseData)
+        {
+            if(responseCallback) {
+                responseCallback(responseData);
+            }
+        }
+
     protected:
         int timeout;
         uint32_t id;
         boost::asio::ip::tcp::resolver resolver;
-        boost::beast::tcp_stream stream;
+        boost::asio::ip::tcp::socket stream;
+
+        boost::asio::steady_timer timer;
 
         boost::beast::flat_buffer buffer;
         boost::beast::http::request<boost::beast::http::string_body> request;
@@ -413,26 +437,6 @@ namespace HttpClient {
             return static_cast<uint32_t>(duration.count());
         }
 
-        void inline onError(const std::string& reason)
-        {
-            if (failureCallback) {
-                if(!responseData) {
-                    responseData = std::make_shared<HttpResponse>();
-                }
-
-                responseData->success = false;
-                responseData->errorMessage = reason;
-
-                failureCallback(responseData);
-            }
-        }
-
-        void inline onSuccess(const HttpResponse_ptr& responseData)
-        {
-            if (responseCallback) {
-                responseCallback(responseData);
-            }
-        }
     };
 
     class HttpConnection : public HttpConnectionBase
@@ -449,6 +453,7 @@ namespace HttpClient {
     class HttpsConnection : public HttpConnectionBase
     {
     public:
+
         HttpsConnection(boost::asio::io_context& ioContext, uint32_t id, boost::asio::ssl::context& sslContext, HttpResponse_cb responseCallback, HttpFailure_cb failureCallback)
             : HttpConnectionBase(boost::asio::make_strand(ioContext), id, responseCallback, failureCallback),
             sslStream(stream, sslContext)
@@ -456,7 +461,7 @@ namespace HttpClient {
 
         }
 
-        void create(const boost::beast::http::request<boost::beast::http::string_body>& request_, const std::string& url, uint32_t port, bool skipBody = false)
+        void create(const boost::beast::http::request<boost::beast::http::string_body>& request_, const std::string& url, uint32_t port, bool skipBody = false) override
         {
             sslStream.set_verify_mode(boost::asio::ssl::verify_peer);
             sslStream.set_verify_callback([](bool, boost::asio::ssl::verify_context&) { return true; });
@@ -473,15 +478,14 @@ namespace HttpClient {
             resolve(url, port);
         }
 
-    private:
-        void onConnect(boost::system::error_code connectError, boost::asio::ip::tcp::resolver::results_type::endpoint_type endpoint) override
+        void onConnect(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type::iterator i) override
         {
-            if(!connectError) {
-                boost::beast::get_lowest_layer(stream).expires_after(std::chrono::milliseconds(timeout));
+            if (!error) {
+                timer.expires_after(std::chrono::milliseconds(timeout));
                 handshake();
             }
             else {
-                onError("Failed to connect to HTTP socket: " + connectError.message());
+                onError("Failed to connect to HTTP socket: " + error.message());
             }
         }
 
@@ -498,24 +502,26 @@ namespace HttpClient {
             });
         }
 
-        void writeRequest()
+        void writeRequest() override
         {
-            boost::beast::http::async_write(sslStream, request, boost::beast::bind_front_handler(&HttpConnectionBase::onRequestWrite, this->shared_from_this()));
+            boost::beast::http::async_write(sslStream, request, std::bind(&HttpConnectionBase::onRequestWrite, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
-        void readHeader()
+        void readHeader() override
         {
             buffer.max_size(MAX_HEADER_CHUNCK_SIZE);
-            boost::beast::http::async_read_header(sslStream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadHeader, this->shared_from_this()));
+            boost::beast::http::async_read_header(sslStream, buffer, response, std::bind(&HttpConnectionBase::onReadHeader, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
 
-        void readBody()
+        void readBody() override
         {
             buffer.max_size(MAX_BODY_CHUNCK_SIZE);
-            boost::beast::http::async_read_some(sslStream, buffer, response, boost::beast::bind_front_handler(&HttpConnectionBase::onReadBody, this->shared_from_this()));
+            boost::beast::http::async_read_some(sslStream, buffer, response, std::bind(&HttpConnectionBase::onReadBody, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
+
         }
 
-        boost::beast::ssl_stream<boost::beast::tcp_stream&> sslStream;
+    private:
+        boost::asio::ssl::stream<boost::asio::ip::tcp::socket&> sslStream;
     };
 
     class Request
