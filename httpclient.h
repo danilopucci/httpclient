@@ -288,6 +288,9 @@ namespace HttpClient {
 
         virtual void create(const boost::beast::http::request<boost::beast::http::string_body>& request_, const std::string& url, uint32_t port, bool skipBody = false)
         {
+            timer.expires_after(std::chrono::milliseconds(timeout));
+            timer.async_wait(std::bind(&HttpConnectionBase::onTimeout, shared_from_this(), std::placeholders::_1));
+
             request = request_;
             connectionStart = std::chrono::steady_clock::now();
             response.skip(skipBody);
@@ -302,7 +305,6 @@ namespace HttpClient {
         virtual void onResolve(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type results)
         {
             if(!error) {
-                timer.expires_after(std::chrono::milliseconds(timeout));
                 connect(results);
             }
             else {
@@ -318,7 +320,6 @@ namespace HttpClient {
         virtual void onConnect(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type::iterator i)
         {
             if(!error) {
-                timer.expires_after(std::chrono::milliseconds(timeout));
                 writeRequest();
             }
             else {
@@ -337,7 +338,7 @@ namespace HttpClient {
                 readHeader();
             }
             else {
-                boost::beast::get_lowest_layer(stream).close();
+                close();
                 onError("Failed to write HTTP request: " + error.message());
             }
         }
@@ -356,13 +357,14 @@ namespace HttpClient {
                 readBody();
             }
             else {
-                boost::beast::get_lowest_layer(stream).close();
+                close();
                 onError("Failed to read HTTP header: " + error.message());
             }
         }
 
         virtual void readBody()
         {
+            timer.expires_after(std::chrono::milliseconds(timeout));
             buffer.max_size(MAX_BODY_CHUNCK_SIZE);
             boost::beast::http::async_read_some(stream, buffer, response, std::bind(&HttpConnectionBase::onReadBody, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
         }
@@ -370,7 +372,7 @@ namespace HttpClient {
         virtual void onReadBody(const boost::beast::error_code& error, std::size_t bytes_transferred)
         {
             if(error && error != boost::beast::http::error::end_of_stream) {
-                boost::beast::get_lowest_layer(stream).close();
+                close();
                 onError("Failed to read HTTP body: " + error.message());
                 return;
             }
@@ -381,11 +383,31 @@ namespace HttpClient {
                 responseData->success = true;
                 onSuccess(responseData);
 
-                boost::beast::get_lowest_layer(stream).close();
+                close();
                 return;
             }
 
             readBody();
+        }
+
+        virtual void close()
+        {
+            timer.cancel();
+            boost::system::error_code ec;
+            stream.close(ec);
+        }
+
+        virtual void onShutdown(boost::system::error_code error)
+        {
+
+        }
+
+        void onTimeout(const boost::system::error_code& error)
+        {
+            if(!error) {
+                close();
+                onError("Failed on HTTP: timeout");
+            }       
         }
 
         void inline onError(const std::string& reason)
@@ -472,6 +494,9 @@ namespace HttpClient {
                 return;
             }
 
+            timer.expires_after(std::chrono::milliseconds(timeout));
+            timer.async_wait(std::bind(&HttpConnectionBase::onTimeout, shared_from_this(), std::placeholders::_1));
+
             request = request_;
             connectionStart = std::chrono::steady_clock::now();
             response.skip(skipBody);
@@ -481,7 +506,6 @@ namespace HttpClient {
         void onConnect(const boost::system::error_code& error, boost::asio::ip::tcp::resolver::results_type::iterator i) override
         {
             if (!error) {
-                timer.expires_after(std::chrono::milliseconds(timeout));
                 handshake();
             }
             else {
@@ -492,12 +516,12 @@ namespace HttpClient {
         void handshake()
         {
             auto self(shared_from_this());
-            sslStream.async_handshake(boost::asio::ssl::stream_base::client, [&, self](const boost::system::error_code& handshakeError) {
-                if(!handshakeError) {
+            sslStream.async_handshake(boost::asio::ssl::stream_base::client, [&, self](const boost::system::error_code& error) {
+                if(!error) {
                     writeRequest();
                 }
                 else {
-                    onError("Failed SSL handshake: " + handshakeError.message());
+                    onError("Failed SSL handshake: " + error.message());
                 }
             });
         }
@@ -515,10 +539,28 @@ namespace HttpClient {
 
         void readBody() override
         {
+            timer.expires_after(std::chrono::milliseconds(timeout));
             buffer.max_size(MAX_BODY_CHUNCK_SIZE);
             boost::beast::http::async_read_some(sslStream, buffer, response, std::bind(&HttpConnectionBase::onReadBody, this->shared_from_this(), std::placeholders::_1, std::placeholders::_2));
-
         }
+
+        void close() override
+        {
+            timer.cancel();
+            sslStream.async_shutdown(std::bind(&HttpConnectionBase::onShutdown, this->shared_from_this(), std::placeholders::_1));
+        }
+
+        void onShutdown(boost::system::error_code error) override
+        {
+            if(error && error != boost::asio::error::eof)
+            {
+                onError("Unexpected error on shutdown: " + error.message());
+            }
+
+            boost::system::error_code ec;
+            stream.close(ec);
+        }
+
 
     private:
         boost::asio::ssl::stream<boost::asio::ip::tcp::socket&> sslStream;
