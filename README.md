@@ -1,5 +1,5 @@
 # httpclient
-A C++ header only lib to handle async HTTP requests in plain or secure mode.
+A C++ single header-only lib to handle async HTTP requests in plain or secure mode.
 
 The following HTTP methods are supported: GET, POST, PUT, PATCH, DELETE, TRACE, CONNECT, HEAD, OPTIONS.
 
@@ -10,10 +10,14 @@ The following HTTP methods are supported: GET, POST, PUT, PATCH, DELETE, TRACE, 
 ### How to install
 
 #### Ubuntu
-```$ sudo apt install libboost-beast-dev```
+```bash
+$ sudo apt install libboost-beast-dev
+```
 
 #### Windows
-```$ vcpkg install boost-beast:x64-windows```
+```shell
+$ vcpkg install boost-beast:x64-windows
+```
 
 ### Basic code usage
 
@@ -28,6 +32,7 @@ bool get(const std::string& url);
 bool get(const std::string& url, std::unordered_map<std::string, std::string>& fields);
 ```
 
+You can find more examples in examples folder 
 
 ```cpp
 #include "httpclient.h"
@@ -58,10 +63,11 @@ int main()
   std::this_thread::sleep_for(std::chrono::milliseconds(10000));
 }
 ```
-You can find more examples in examples folder 
 
 ### URLs
-It can handle multiple URL formats, both on HTTP and HTTPS. Some examples are:
+It can handle multiple URL formats, both on HTTP and HTTPS. In case of hiding "https://" or "http://" it assumes that it is http and use the plain mode request.
+
+Some examples are:
 ```
 Basic HTTP URL:
 http://www.example.com 
@@ -81,4 +87,6 @@ http://www.example.com/resource#section2
 HTTPS URL with Path, Query, and Fragment:
 https://www.example.com/path/resource?param=value#section3
 ```
+
+
 
