@@ -552,11 +552,6 @@ namespace HttpClient {
 
         void onShutdown(boost::system::error_code error) override
         {
-            if(error && error != boost::asio::error::eof)
-            {
-                onError("Unexpected error on shutdown: " + error.message());
-            }
-
             boost::system::error_code ec;
             stream.close(ec);
         }
