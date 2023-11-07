@@ -39,6 +39,17 @@ int main()
         std::getline(std::cin, line);
         boost::algorithm::to_lower(line);
 
+        if(stringStartsWith(line, "ddd")) {
+            std::cout << "setting timeout to 3000" << std::endl;
+
+            request.setTimeout(3000);
+        }
+
+        if(stringStartsWith(line, "fff")) {
+            std::cout << "setting timeout to 3" << std::endl;
+
+            request.setTimeout(3);
+        }
 
         // GET method examples
         if(stringStartsWith(line, "gsa")) {
@@ -146,6 +157,168 @@ int main()
 
             std::string url = "http://www.example.com";
             request.connect(url);
+        }
+
+        // POST method example
+        if(stringStartsWith(line, "ps")) {
+            std::cout << "sending POST in secure mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string issue_data = R"({
+                "title": "Example Text",
+                "body": "This is a sample text."
+            })";
+
+            std::string url = "https://httpbin.org/post";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.post(url, issue_data, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
+        }
+        else if(stringStartsWith(line, "pp")) {
+            std::cout << "sending POST in plain mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string issue_data = R"({
+                "title": "Example Text",
+                "body": "This is a sample text."
+            })";
+
+            std::string url = "http://httpbin.org/post";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.post(url, issue_data, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
+        }
+
+        // PATCH method example
+        if(stringStartsWith(line, "pas")) {
+            std::cout << "sending PATCH in secure mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string issue_data = R"({
+                "title": "Example Text - Changed"
+            })";
+
+            std::string url = "https://httpbin.org/patch";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.patch(url, issue_data, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
+        }
+        else if(stringStartsWith(line, "pap")) {
+            std::cout << "sending PATCH in plain mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string issue_data = R"({
+                "title": "Example Text - Changed"
+            })";
+
+            std::string url = "http://httpbin.org/patch";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.patch(url, issue_data, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
+        }
+
+        // PUT method example
+        if(stringStartsWith(line, "pus")) {
+            std::cout << "sending PUT in secure mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string issue_data = R"({
+                "colors": ["blue"]
+            })";
+
+            std::string url = "https://httpbin.org/put";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.put(url, issue_data, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
+        }
+        else if(stringStartsWith(line, "pup")) {
+            std::cout << "sending PUT in plain mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string issue_data = R"({
+                "colors": ["blue"]
+            })";
+
+            std::string url = "http://httpbin.org/put";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.put(url, issue_data, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
+        }
+
+        // DELETE method example
+        if(stringStartsWith(line, "ds")) {
+            std::cout << "sending DELETE in secure mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string url = "https://httpbin.org/delete";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.delete_(url, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
+        }
+        else if(stringStartsWith(line, "dsp")) {
+            std::cout << "sending DELETE in plain mode" << std::endl;
+
+            std::string token = "abcdef123456789";
+
+            std::string url = "http://httpbin.org/delete";
+
+            std::unordered_map<std::string, std::string> headers = {
+                {"Authorization", "Bearer " + token},
+                {"Accept", "application/json"}
+            };
+
+            request.delete_(url, headers);
+
+            std::cout << "counter: " << counterInner++ << std::endl;
         }
         
         if(stringStartsWith(line, "u")) {
