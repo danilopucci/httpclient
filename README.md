@@ -11,7 +11,7 @@ The following HTTP methods are supported: GET, POST, PUT, PATCH, DELETE, TRACE, 
 
 #### Ubuntu
 ```bash
-$ sudo apt install libboost-beast-dev
+$ sudo apt-get install libboost-all-dev libssl-dev
 ```
 
 #### Windows
