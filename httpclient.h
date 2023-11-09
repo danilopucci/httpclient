@@ -224,8 +224,8 @@ namespace HttpClient {
             auto& responseHeader = response.get();
             statusCode = responseHeader.result_int();
             version = responseHeader.version();
-            location = responseHeader[boost::beast::http::field::location].to_string();
-            contentType = responseHeader[boost::beast::http::field::content_type].to_string();
+            location = std::string(responseHeader[boost::beast::http::field::location]);
+            contentType = std::string(responseHeader[boost::beast::http::field::content_type]);
 
             auto headers = responseHeader.base();
             for (const auto& header : headers) {
@@ -238,7 +238,7 @@ namespace HttpClient {
 
             bodySize = 0;
             if (responseHeader.has_content_length()) {
-                bodySize = std::stoul(responseHeader[boost::beast::http::field::content_length].to_string());
+                bodySize = std::stoul(std::string(responseHeader[boost::beast::http::field::content_length]));
             }
         }
 
