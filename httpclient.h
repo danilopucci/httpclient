@@ -802,6 +802,7 @@ namespace HttpClient {
                 setUniqueRequestId();
                 request.method(boost::beast::http::verb::post);
                 request.body() = postData;
+                request.prepare_payload();
 
                 doRequest(httpUrl, request);
             }
@@ -832,6 +833,7 @@ namespace HttpClient {
                 setUniqueRequestId();
                 request.method(boost::beast::http::verb::patch);
                 request.body() = patchData;
+                request.prepare_payload();
 
                 doRequest(httpUrl, request);
             }
@@ -862,6 +864,7 @@ namespace HttpClient {
                 setUniqueRequestId();
                 request.method(boost::beast::http::verb::put);
                 request.body() = putData;
+                request.prepare_payload();
 
                 doRequest(httpUrl, request);
             }
