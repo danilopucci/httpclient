@@ -68,7 +68,6 @@ namespace HttpClient {
         HttpUrl(const std::string& url_)
             : url(url_)
         {
-            boost::algorithm::to_lower(url);
             parseUrl(url);
         };
 
@@ -149,6 +148,7 @@ namespace HttpClient {
         void setProtocol(const std::ssub_match& match) {
             if (match.matched) {
                 protocol = match.str();
+                boost::algorithm::to_lower(protocol);
             }
             else {
                 protocol = "http://";
